@@ -2,9 +2,10 @@
   "name": "gateio-ws",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
-    "start": "node src/index.js",
+    "prestart": "tsc",
+    "start": "node dist/index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
@@ -13,5 +14,9 @@
   "dependencies": {
     "ws": "^8.2.3"
   },
-  "type": "module"
+  "type": "module",
+  "devDependencies": {
+    "@types/ws": "^8.2.0",
+    "typescript": "^4.4.4"
+  }
 }

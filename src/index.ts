@@ -15,7 +15,7 @@ ws.on("open", function open() {
   console.log('subscribed', 'spot.tickers')
 });
 
-ws.on("message", function message(data) {
+ws.on("message", function message(data: WebSocket) {
   console.log("received: %s", data);
 });
 
@@ -34,8 +34,6 @@ ws1.on("open", function open() {
   console.log('subscribed', 'spot.tickers')
 });
 
-ws1.on("message", function message(data
-  
-  ) {
+ws1.on("message", function message(data:WebSocket) {
   console.log("received: %s", data);
 });
