@@ -2,19 +2,18 @@
   "name": "gateio-ws",
   "version": "1.0.0",
   "description": "",
-  "main": "dist/index.js",
   "scripts": {
-    "prestart": "tsc",
-    "start": "node dist/index.js",
+    "start:client": "ts-node src/client.ts",
+    "start:server": "ts-node src/server.ts",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "ts-node": "^10.4.0",
     "ws": "^8.2.3"
   },
-  "type": "module",
   "devDependencies": {
     "@types/ws": "^8.2.0",
     "typescript": "^4.4.4"
