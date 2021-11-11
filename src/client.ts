@@ -1,7 +1,6 @@
 import { catchError, fromEvent, map, merge, Observable, tap } from 'rxjs';
 import { MessageEvent } from 'ws';
-import { getOrders, listOrders, orders } from './services/datastax.api';
-import { connectToWebsocket } from './services/gateio.api';
+import { getOrders, orders } from './services/datastax.api';
 
 (async () => {
   await getOrders();
@@ -54,3 +53,30 @@ import { connectToWebsocket } from './services/gateio.api';
   ).subscribe();
   
 })();  
+import WebSocket from "ws";
+import { listOrders } from './services/gateio.api';
+
+export async function connectToWebsocket(
+  wsUrl: string,
+  channel: string,
+  payload?: any
+) {
+  const ws = new WebSocket(wsUrl);
+  return new Promise<WebSocket>((resolve, reject) => {
+    if (payload) {
+      ws.on("open", function open() {
+        console.log("subscribing", channel, payload);
+        ws.send(
+          JSON.stringify({
+            time: Math.round(new Date().getTime() / 1000),
+            channel: channel,
+            event: "subscribe",
+            payload,
+          })
+        );
+        console.log("subscribed", channel, payload);
+        resolve(ws);
+      });
+    } else resolve(ws);
+  });
+}
