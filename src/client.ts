@@ -52,4 +52,5 @@ import { connectToWebsocket } from './services/gateio.api';
       return caught;
     }),
   ).subscribe();
-  }
+  
+})();  
