@@ -24,5 +24,6 @@ export async function getOrders() {
       ...value,
     })
   );
-  console.log(orders);
+  // console.log(orders);
+  return orders;
 }

@@ -8,8 +8,8 @@ export async function createOrder(pair: string, price: number, amount: number) {
     account: "spot",
     side: "buy",
     iceberg: "0",
-    amount: amount,
-    price: price,
+    amount,
+    price,
     timeInForce: "gtc",
     autoBorrow: false,
   });
@@ -21,9 +21,8 @@ export async function createOrder(pair: string, price: number, amount: number) {
       Authorization: process.env.GATEIO_NEXTJS_API_KEY || "",
       "Content-Type": "application/json",
     },
-    data: data,
+    data,
   };
-
   const response = await axios(config);
   return response.data.data;
 }
@@ -36,8 +35,6 @@ export async function listOrders(pair: string) {
       Authorization: process.env.GATEIO_NEXTJS_API_KEY || "",
     },
   };
-
-  await axios(config);
   const response = await axios(config);
   return response.data.data;
 }
