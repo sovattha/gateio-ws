@@ -1,82 +1,38 @@
-import { catchError, fromEvent, map, merge, Observable, tap } from 'rxjs';
-import { MessageEvent } from 'ws';
-import { getOrders, orders } from './services/datastax.api';
+import {
+  combineLatest,
+  ConnectableObservable,
+  fromEvent,
+  interval,
+  map,
+  Observable,
+  switchMap,
+  takeWhile,
+  tap,
+} from 'rxjs';
+import { getOrders } from './services/datastax.api';
+import { connectToWebsocket, formatTickerUpdate } from './services/gateio.ws';
+import { Order } from './types/order';
+import { SpotTickerUpdate } from './types/spot-ticker';
 
-(async () => {
-  await getOrders();
-  const ltcUsdt = connectToWebsocket('wss://api.gateio.ws/ws/v4/', 'spot.tickers', ['LTC_USDT']);
-  const ethUsdt = connectToWebsocket('wss://api.gateio.ws/ws/v4/', 'spot.tickers', ['ETH_USDT']);
-  const btcUsdt = connectToWebsocket('wss://api.gateio.ws/ws/v4/', 'spot.tickers', ['BTC_USDT']);
-  const ordersWs = await connectToWebsocket('ws://localhost:8080', 'orders');
-  const [ltcUsdt$, ethUsdt$, btcUsdt$, ordersWs$] = await Promise.all([ltcUsdt, ethUsdt, btcUsdt, ordersWs]).then((data) => 
-    Promise.all(data.map(w => fromEvent(w, 'message') as Observable<MessageEvent>))
+async function getOrdersAndWebsockets() {
+  const orders$ = interval(2000).pipe(
+    switchMap(() => getOrders()),
+    map((orders: Order[]) =>
+      Array.from(new Set(orders.map(({ pair }) => pair)))
+    )
   );
-
-  const refreshOrders$ = ordersWs$.pipe(
-    map((value) => JSON.parse(value.data.toString()) as any),
-    tap(async (response) => {
-      await getOrders();
-      console.log(`${response.channel} = ${response.payload?.pair} ${response.payload?.price} ${response.payload?.amount}`);
-    }),
+  const allWebsockets$ = orders$.pipe(
+    switchMap((pairs) =>
+      connectToWebsocket('wss://api.gateio.ws/ws/v4/', 'spot.tickers', pairs)
+    ),
+    switchMap((w) => fromEvent(w, 'message') as Observable<MessageEvent>),
+    map((value) => JSON.parse(value.data.toString()) as SpotTickerUpdate)
   );
-
-  const allUsdt$ = merge(ltcUsdt$, ethUsdt$, btcUsdt$).pipe(
-    map((value) => JSON.parse(value.data.toString()) as any),
-    tap((response) => {
-      console.log(`${response.channel} = ${response.result?.currency_pair || ''} - ${response.result?.last || ''} ${response.result?.status || ''}`);
-    }),
-    tap(async (response) => {
-      const pair = response.result?.currency_pair;
-      const price = response.result?.last;
-      const matchingOrders = orders.filter(order => order.pair === pair && (!order.triggered || order.triggered < 1));
-      matchingOrders.map(async matchingOrder => {
-        console.log(response.result?.last , matchingOrder?.price!)
-        if (response.result?.last < matchingOrder?.price!) {
-          const existingOrders = await listOrders(pair);
-          console.log(existingOrders)
-          if (!existingOrders?.length) {
-            console.log('Create order', pair, price, 0.01); // TODO amount
-            // createOrder(pair, price, 0.01); // TODO amount
-          } else { 
-            console.log('Order exists', pair);
-          }
-        }
-      });
-    }),
+  return combineLatest([orders$, allWebsockets$]).pipe(
+    tap(([pairs, _]) => console.log(pairs)),
+    tap(([_, tickerUpdate]) => console.log(formatTickerUpdate(tickerUpdate))),
+    takeWhile(([pairs]) => pairs.length > 0)
   );
-  
-  merge(refreshOrders$, allUsdt$).pipe(
-    catchError((err, caught) => {
-      console.log('error: ', err)
-      return caught;
-    }),
-  ).subscribe();
-  
-})();  
-import WebSocket from "ws";
-import { listOrders } from './services/gateio.api';
-
-export async function connectToWebsocket(
-  wsUrl: string,
-  channel: string,
-  payload?: any
-) {
-  const ws = new WebSocket(wsUrl);
-  return new Promise<WebSocket>((resolve, reject) => {
-    if (payload) {
-      ws.on("open", function open() {
-        console.log("subscribing", channel, payload);
-        ws.send(
-          JSON.stringify({
-            time: Math.round(new Date().getTime() / 1000),
-            channel: channel,
-            event: "subscribe",
-            payload,
-          })
-        );
-        console.log("subscribed", channel, payload);
-        resolve(ws);
-      });
-    } else resolve(ws);
-  });
 }
+
+(async () => (await getOrdersAndWebsockets()).subscribe())();
