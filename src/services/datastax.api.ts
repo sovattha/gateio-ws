@@ -2,7 +2,7 @@ import axios, { AxiosRequestConfig } from 'axios';
 import { UserOrder } from '../types/order';
 
 /**
- * 
+ * Fetch the user orders from Datastax.
  * @returns 
  */
 export async function getUserOrders() {
@@ -23,8 +23,8 @@ export async function getUserOrders() {
       })
     );
     return orders as UserOrder[];
-  } catch (error) {
-    console.error(error);
+  } catch (error: any) {
+    console.error(error?.response?.data);
     return [];
   }
 }
