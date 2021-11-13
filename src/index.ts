@@ -1,46 +1,56 @@
 import {
-  buffer,
-  bufferCount,
-  combineLatest, distinct, distinctUntilChanged, filter, fromEvent,
+  distinctUntilChanged, filter, fromEvent,
   interval,
   map,
-  Observable, Subject,
+  mapTo,
+  Observable, share, Subject,
   switchMap,
-  takeUntil, takeWhile, tap, throttle, throttleTime, withLatestFrom
+  takeUntil, tap
 } from 'rxjs';
 import { getUserOrders } from './services/datastax.api';
 import { connectToWebsocket, formatTickerUpdate } from './services/gateio.ws';
 import { SpotTickerUpdate } from './types/spot-ticker';
 
-async function getOrdersAndWebsockets() {
-  const orders$ = interval(2000).pipe(
-    tap(console.log),
-    switchMap(() => getUserOrders()),
-    map((orders) => Array.from(new Set(orders.map(({ pair }) => pair))) ),
-    distinctUntilChanged((prev, curr) => JSON.stringify(prev) === JSON.stringify(curr)),
-  );
-  interval(2000).pipe(
-    withLatestFrom(orders$),
-    filter(([_, orders]) => orders.length === 0),
-    tap(() => stopTickerUpdates$.next(true)),
-  );
+/**
+ * Connect to Gate.io websockets and suscribe to pairs that are on the user orders list on Datastax.
+ * [Datastax user orders] -- pair --> [Gate.io websockets] -- ticker update --> 
+ * @returns Observable of ticker updates from Gate.io websockets
+ */
+async function getTickerUpdates() {
   const stopTickerUpdates$ = new Subject<boolean>();
+
+  // Main stream definition
+  const orders$ = interval(2000).pipe( // Every 2 seconds
+    switchMap(() => getUserOrders()), // Poll user orders from Datastax
+    map((orders) => Array.from(new Set(orders.map(({ pair }) => pair))) ), // Filter unique values of pairs
+    distinctUntilChanged((prev, curr) => JSON.stringify(prev) === JSON.stringify(curr)), // Emit values only when the user orders change
+    share(), // Allow to be used later without retriggering an HTTP connection to Datastax
+  );
   const allTickerUpdates$ = orders$.pipe(
+    filter(pairs => !!pairs.length), // The very first value of pair can be empty
     switchMap((pairs) =>
-      connectToWebsocket('wss://api.gateio.ws/ws/v4/', 'spot.tickers', pairs)
+      connectToWebsocket('wss://api.gateio.ws/ws/v4/', 'spot.tickers', pairs) // Create a websocket connection to Gate.io and subscribe to the given pair
     ),
-    switchMap((w) => fromEvent(w, 'message') as Observable<MessageEvent>),
-    map((value) => JSON.parse(value.data.toString()) as SpotTickerUpdate)
+    switchMap((websocket) => fromEvent(websocket, 'message') as Observable<MessageEvent>), // Wrap the newly created websocket in an observable
+    map((value) => JSON.parse(value.data.toString()) as SpotTickerUpdate), // Parse the websocket response
+    tap((tickerUpdate) => console.log(formatTickerUpdate(tickerUpdate))), // Print out the newly received quote
+    takeUntil((stopTickerUpdates$)), // Stop emitting values when no user order is available
   );
-  const ordersAndWebsockets$ = combineLatest([orders$, allTickerUpdates$]).pipe(
-    tap(([pairs, _]) => console.log('pairs', pairs)),
-    tap(([_, tickerUpdate]) => console.log('ticker update', formatTickerUpdate(tickerUpdate))),
-    takeUntil(stopTickerUpdates$)
-  );
-  return ordersAndWebsockets$;
+
+  // Secondary streams definitions
+  orders$.pipe(
+    filter((orders) => !orders.length), // When no order is present anymore
+    tap(() => stopTickerUpdates$.next(true)), // Emit a value to disconnect from the ticker updates websockets
+  ).subscribe(); // We subscribe here because we want to this observable to keep on going independently
+  
+  stopTickerUpdates$.pipe(
+    mapTo(false), // Reset the value of the observable to false, so that new websockets connections can happen again when new user orders are present again
+    tap(() => allTickerUpdates$.subscribe()), // Gate.io websockets will now just wait for new orders to come again
+  ).subscribe(); // We subscribe here because we want to this observable to keep on going independently
+  return allTickerUpdates$;
 }
 
 (async () => {
-  const ordersAndWebsockets$ = await getOrdersAndWebsockets()
+  const ordersAndWebsockets$ = await getTickerUpdates();
   ordersAndWebsockets$.subscribe();
 })();
