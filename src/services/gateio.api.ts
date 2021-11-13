@@ -1,6 +1,14 @@
 import axios, { AxiosRequestConfig } from "axios";
+import { GateioOrder } from "../types/order";
 
-export async function createOrder(pair: string, price: number, amount: number) {
+/**
+ * Create a limit order
+ * @param pair 
+ * @param price 
+ * @param amount 
+ * @returns 
+ */
+export async function createLimitOrder(pair: string, price: number, amount: number) {
   var data = JSON.stringify({
     text: "t-nextjs",
     currencyPair: pair,
@@ -27,7 +35,12 @@ export async function createOrder(pair: string, price: number, amount: number) {
   return response.data.data;
 }
 
-export async function listOrders(pair: string) {
+/**
+ * List all the open orders for a given pair
+ * @param pair 
+ * @returns 
+ */
+export async function listOpenOrders(pair: string) {
   var config: AxiosRequestConfig = {
     method: "get",
     url: `${process.env.GATEIO_NEXTJS_API_URL}/spot/orders?status=open&currencyPair=${pair}`,
@@ -36,5 +49,5 @@ export async function listOrders(pair: string) {
     },
   };
   const response = await axios(config);
-  return response.data.data;
+  return response.data.data as GateioOrder[];
 }

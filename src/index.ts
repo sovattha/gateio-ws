@@ -1,23 +1,21 @@
 import {
-  combineLatest,
-  ConnectableObservable,
-  fromEvent,
+  combineLatest, fromEvent,
   interval,
   map,
   Observable,
+  of,
   switchMap,
   takeWhile,
-  tap,
+  tap
 } from 'rxjs';
-import { getOrders } from './services/datastax.api';
+import { getUserOrders } from './services/datastax.api';
 import { connectToWebsocket, formatTickerUpdate } from './services/gateio.ws';
-import { Order } from './types/order';
 import { SpotTickerUpdate } from './types/spot-ticker';
 
 async function getOrdersAndWebsockets() {
-  const orders$ = interval(2000).pipe(
-    switchMap(() => getOrders()),
-    map((orders: Order[]) =>
+  const orders$ = of([]).pipe(
+    switchMap(() => getUserOrders()),
+    map((orders) =>
       Array.from(new Set(orders.map(({ pair }) => pair)))
     )
   );
