@@ -28,3 +28,7 @@ export async function getUserOrders() {
     return [];
   }
 }
+
+export function formatOrder(order: UserOrder): string {
+  return `${order.pair} ${order.amount} ${order.price} ${order.fulfilled}`;
+}

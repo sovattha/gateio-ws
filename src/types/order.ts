@@ -1,5 +1,5 @@
 export type UserOrder = GateioOrder & {
-    triggered?: number;
+    fulfilled?: number;
 };
 
 export type GateioOrder = {
