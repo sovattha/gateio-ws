@@ -92,7 +92,12 @@ async function getTrader$() {
       console.log('TRADER valid orders', [validOrders.map(formatOrder), formatTickerUpdate(tickerUpdate)]),
     ),
     map(([validOrders, tickerUpdate]) =>
-      validOrders.filter((order) => tickerUpdate.result.currency_pair === order.pair && +tickerUpdate.result.last < +order.price),
+      validOrders.filter(
+        (order) =>
+          tickerUpdate.result.currency_pair === order.pair &&
+          ((order.side === 'buy' && +tickerUpdate.result.last < +order.price) ||
+            (order.side === 'sell' && +tickerUpdate.result.last > +order.price)),
+      ),
     ),
     throttleTime(2000), // Important: avoids duplication of limit orders if too many ticker updates occur
     tap(async (validOrders) => {
@@ -129,7 +134,13 @@ async function triggerTrade(order: UserOrder) {
   });
 
   console.log(`TRADER will create a limit order for ${order.id!}`);
-  const orderResponse = await createLimitOrder(`t-${order.id!.substring(0, 20)}`, order.pair, `${order.price}`, `${order.amount}`);
+  const orderResponse = await createLimitOrder(
+    `t-${order.id!.substring(0, 20)}`,
+    order.pair,
+    `${order.price}`,
+    `${order.amount}`,
+    `${order.side}`,
+  );
 
   await updateUserOrder(order.id!, {
     ...order,

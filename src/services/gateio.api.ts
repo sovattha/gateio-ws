@@ -6,15 +6,16 @@ import { ApiClient, Order, SpotApi } from 'gate-api';
  * @param pair
  * @param price
  * @param amount
+ * @param side
  * @returns
  */
-export async function createLimitOrder(text: string, pair: string, price: string, amount: string) {
+export async function createLimitOrder(text: string, pair: string, price: string, amount: string, side: string) {
   var data: Order = {
     text,
     currencyPair: pair,
     type: Order.Type.Limit,
     account: Order.Account.Spot,
-    side: Order.Side.Buy,
+    side: side === 'buy' ? Order.Side.Buy : Order.Side.Sell,
     iceberg: '0',
     amount,
     price,
@@ -25,8 +26,8 @@ export async function createLimitOrder(text: string, pair: string, price: string
   try {
     console.log('GATEIO API Creating order', text, pair, price, amount);
     const response = await createOrder(data);
-    console.log('Created order', response);
-    return response;
+    console.log('Created order', response.body);
+    return response.body;
   } catch (error: any) {
     console.error(error?.response?.data);
     return error?.response?.data;
