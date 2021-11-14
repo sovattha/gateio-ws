@@ -45,6 +45,7 @@ export async function updateUserOrder(orderId: string, data: UserOrder) {
     data,
   };
   try {
+    console.log('Update user order', orderId, data);
     const response = await axios(config);
     return response.data;
   } catch (error: any) {

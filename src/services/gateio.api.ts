@@ -39,10 +39,10 @@ export async function createLimitOrder(
   };
 
   try {
-    console.log('Creating order', text, pair, price, amount);
-    const response = await axios(config);
-    console.log('Created order', response.data);
-    return response.data.data;
+    console.log('GATEIO API Creating order', text, pair, price, amount);
+    // const response = await axios(config);
+    // console.log('Created order', response.data);
+    // return response.data.data;
   } catch (error: any) {
     console.error(error?.response?.data);
     return [];
