@@ -47,9 +47,10 @@ export async function updateUserOrder(orderId: string, data: UserOrder) {
   try {
     console.log('Update user order', orderId, data);
     const response = await axios(config);
+    console.log('Datastax response', response.status, response.statusText, response.data);
     return response.data;
   } catch (error: any) {
-    console.error(error?.response?.data);
+    console.error(error);
     return [];
   }
 }
@@ -63,5 +64,6 @@ export function hasValidOrders(orders: UserOrder[]): boolean {
 }
 
 export function isValidOrder(order: UserOrder): boolean {
+  console.log(order.id, (!order.fulfilled || order.fulfilled < 1));
   return order && (!order.fulfilled || order.fulfilled < 1);
 }

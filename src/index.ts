@@ -1,4 +1,5 @@
 import {
+  catchError,
   debounceTime,
   distinctUntilChanged,
   filter,
@@ -7,6 +8,7 @@ import {
   map,
   mapTo,
   Observable,
+  of,
   share,
   Subject,
   switchMap,
@@ -96,11 +98,16 @@ async function getTrader$() {
 
   // The trader is responsible of taking trades when the ticker emits a price lower than the watcher's price
   const trader$ = combineLatest([orders$, ticker$]).pipe(
+    tap(([orders, tickerUpdate]) =>
+      console.log("TRADER orders", [
+        orders.map(formatOrder),
+        formatTickerUpdate(tickerUpdate),
+      ])
+    ),    
     debounceTime(2000), // Important: avoids duplication of limit orders when many ticker updates occur
-    distinctUntilChanged(
-      (prev, curr) => JSON.stringify(prev) === JSON.stringify(curr)
-    ), // Avoids duplication of order when the same limit order is emitted
-    tap(() => console.log("TRADER")),
+    // distinctUntilChanged(
+    //   (prev, curr) => JSON.stringify(prev) === JSON.stringify(curr)
+    // ), // Avoids duplication of order when the same limit order is emitted
     map(
       ([orders, tickerUpdate]) =>
         [orders.filter(isValidOrder), tickerUpdate] as [
@@ -109,7 +116,7 @@ async function getTrader$() {
         ]
     ),
     tap(([validOrders, tickerUpdate]) =>
-      console.log("TRADER", [
+      console.log("TRADER valid orders", [
         validOrders.map(formatOrder),
         formatTickerUpdate(tickerUpdate),
       ])
@@ -117,17 +124,31 @@ async function getTrader$() {
     tap(async ([validOrders, tickerUpdate]) => {
       for (const order of validOrders) {
         if (+tickerUpdate.result.last < +order.price) {
+
+          const updatedUserOrder = await updateUserOrder(order.id!, { ...order, fulfilled: 1 });
+          console.log('updatedUserOrder',updatedUserOrder)
+
           console.log(`TRADER will create a limit order for ${order.id!}`);
-          await updateUserOrder(order.id!, { ...order, fulfilled: 1 });
-          await createLimitOrder(
+          const orderResponse = await createLimitOrder(
             `t-${order.id!.substring(0, 20)}`,
             order.pair,
-            order.price,
-            order.amount
+            `${order.price}`,
+            `${order.amount}`
           );
+
+          const updatedUserOrder2 = await updateUserOrder(order.id!, {
+            ...order,
+            orderResponse,
+            orderResponseDate: new Date().toISOString(),
+          });
+          console.log('updatedUserOrder2',updatedUserOrder2)
         }
       }
-    })
+    }),
+    catchError((error) => {
+      console.error(error);
+      return of(undefined);
+    }),
   );
   return trader$;
 }

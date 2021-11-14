@@ -1,5 +1,4 @@
-import axios, { AxiosRequestConfig } from 'axios';
-import { GateioOrder } from '../types/order';
+import { ApiClient, Order, SpotApi } from 'gate-api';
 
 /**
  * Create a limit order
@@ -12,56 +11,57 @@ import { GateioOrder } from '../types/order';
 export async function createLimitOrder(
   text: string,
   pair: string,
-  price: number,
-  amount: number
+  price: string,
+  amount: string,
 ) {
-  var data = JSON.stringify({
+  var data: Order = {
     text,
     currencyPair: pair,
-    type: 'limit',
-    account: 'spot',
-    side: 'buy',
+    type: Order.Type.Limit,
+    account: Order.Account.Spot,
+    side: Order.Side.Buy,
     iceberg: '0',
     amount,
     price,
-    timeInForce: 'gtc',
+    timeInForce: Order.TimeInForce.Gtc,
     autoBorrow: false,
-  });
-
-  var config: AxiosRequestConfig = {
-    method: 'post',
-    url: `${process.env.GATEIO_NEXTJS_API_URL}/spot/orders`,
-    headers: {
-      Authorization: process.env.GATEIO_NEXTJS_API_KEY || '',
-      'Content-Type': 'application/json',
-    },
-    data,
   };
 
   try {
     console.log('GATEIO API Creating order', text, pair, price, amount);
+    const response = await createOrder(data);
+    console.log('Created order', response);
+    return response;
     // const response = await axios(config);
     // console.log('Created order', response.data);
     // return response.data.data;
   } catch (error: any) {
     console.error(error?.response?.data);
-    return [];
+    return error?.response?.data;
   }
 }
 
 /**
- * List all the open orders for a given pair
- * @param pair
- * @returns
+ * Get an instance of the Gate.io Spot API client
+ * @param key 
+ * @param secret 
+ * @returns 
  */
-export async function listOpenOrders(pair: string) {
-  var config: AxiosRequestConfig = {
-    method: 'get',
-    url: `${process.env.GATEIO_NEXTJS_API_URL}/spot/orders?status=open&currencyPair=${pair}`,
-    headers: {
-      Authorization: process.env.GATEIO_NEXTJS_API_KEY || '',
-    },
-  };
-  const response = await axios(config);
-  return response.data as GateioOrder[];
+export function getSpotApi(key?: string, secret?: string) {
+  const client = new ApiClient();
+  if (key && secret)
+    client.setApiKeySecret(key, secret);
+  return new SpotApi(client);
+}
+
+/**
+ * Send the given order to the spot API
+ * @param order 
+ * @returns 
+ */
+async function createOrder(order: Order) {
+  const authorization = process.env.GATEIO_API_KEY || '';
+  const [key, secret] = authorization.split(':');
+  const value = await getSpotApi(key, secret).createOrder(order);
+  return value;
 }
