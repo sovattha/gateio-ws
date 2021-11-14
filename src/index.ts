@@ -95,20 +95,7 @@ async function getTrader$() {
     throttleTime(2000), // Important: avoids duplication of limit orders if too many ticker updates occur
     tap(async (validOrders) => {
       for (const order of validOrders) {
-        await updateUserOrder(order.id!, {
-          ...order,
-          fulfilled: 1,
-        });
-
-        console.log(`TRADER will create a limit order for ${order.id!}`);
-        const orderResponse = await createLimitOrder(`t-${order.id!.substring(0, 20)}`, order.pair, `${order.price}`, `${order.amount}`);
-
-        await updateUserOrder(order.id!, {
-          ...order,
-          fulfilled: 1,
-          orderResponse,
-          orderResponseDate: new Date().toISOString(),
-        });
+        await triggerTrade(order);
       }
     }),
     catchError((error) => {
@@ -126,4 +113,26 @@ async function getTrader$() {
 
 function getPriceTuple(tuple: [UserOrder[], SpotTickerUpdate]) {
   return `${tuple[0].map((userOrder) => userOrder.price).join(' ')} ${tuple[1].result.last}`;
+}
+
+/**
+ * Trigger the given trade
+ * TODO this can be done in a subject with a distinctUntilChanged + throttleTime to avoid duplication of orders
+ * @param userOrder
+ */
+async function triggerTrade(order: UserOrder) {
+  await updateUserOrder(order.id!, {
+    ...order,
+    fulfilled: 1,
+  });
+
+  console.log(`TRADER will create a limit order for ${order.id!}`);
+  const orderResponse = await createLimitOrder(`t-${order.id!.substring(0, 20)}`, order.pair, `${order.price}`, `${order.amount}`);
+
+  await updateUserOrder(order.id!, {
+    ...order,
+    fulfilled: 1,
+    orderResponse,
+    orderResponseDate: new Date().toISOString(),
+  });
 }
