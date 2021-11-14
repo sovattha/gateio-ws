@@ -8,12 +8,7 @@ import { ApiClient, Order, SpotApi } from 'gate-api';
  * @param amount
  * @returns
  */
-export async function createLimitOrder(
-  text: string,
-  pair: string,
-  price: string,
-  amount: string,
-) {
+export async function createLimitOrder(text: string, pair: string, price: string, amount: string) {
   var data: Order = {
     text,
     currencyPair: pair,
@@ -32,9 +27,6 @@ export async function createLimitOrder(
     const response = await createOrder(data);
     console.log('Created order', response);
     return response;
-    // const response = await axios(config);
-    // console.log('Created order', response.data);
-    // return response.data.data;
   } catch (error: any) {
     console.error(error?.response?.data);
     return error?.response?.data;
@@ -43,21 +35,20 @@ export async function createLimitOrder(
 
 /**
  * Get an instance of the Gate.io Spot API client
- * @param key 
- * @param secret 
- * @returns 
+ * @param key
+ * @param secret
+ * @returns
  */
 export function getSpotApi(key?: string, secret?: string) {
   const client = new ApiClient();
-  if (key && secret)
-    client.setApiKeySecret(key, secret);
+  if (key && secret) client.setApiKeySecret(key, secret);
   return new SpotApi(client);
 }
 
 /**
  * Send the given order to the spot API
- * @param order 
- * @returns 
+ * @param order
+ * @returns
  */
 async function createOrder(order: Order) {
   const authorization = process.env.GATEIO_API_KEY || '';

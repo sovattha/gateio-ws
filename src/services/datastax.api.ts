@@ -16,12 +16,10 @@ export async function getUserOrders() {
   };
   try {
     const response = await axios(config);
-    const orders = Object.entries(response.data.data).map(
-      ([key, value]: [string, any]) => ({
-        id: key,
-        ...value,
-      })
-    );
+    const orders = Object.entries(response.data.data).map(([key, value]: [string, any]) => ({
+      id: key,
+      ...value,
+    }));
     return orders as UserOrder[];
   } catch (error: any) {
     console.error(error?.response?.data);
@@ -64,6 +62,5 @@ export function hasValidOrders(orders: UserOrder[]): boolean {
 }
 
 export function isValidOrder(order: UserOrder): boolean {
-  console.log(order.id, (!order.fulfilled || order.fulfilled < 1));
   return order && (!order.fulfilled || order.fulfilled < 1);
 }
