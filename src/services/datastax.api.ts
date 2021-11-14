@@ -55,7 +55,7 @@ export async function updateUserOrder(orderId: string, data: UserOrder) {
 }
 
 export function formatOrder(order: UserOrder): string {
-  return `${order.pair} ${order.amount} ${order.price} ${order.fulfilled}`;
+  return `${order.pair} ${order.amount} ${order.price} ${order.fulfilled || 0}`;
 }
 
 export function hasValidOrders(orders: UserOrder[]): boolean {

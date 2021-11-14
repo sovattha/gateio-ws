@@ -7,6 +7,7 @@ import {
   map,
   mapTo,
   Observable,
+  share,
   Subject,
   switchMap,
   takeUntil,
@@ -20,27 +21,33 @@ import {
   isValidOrder,
   updateUserOrder,
 } from "./services/datastax.api";
-import { createLimitOrder, listOpenOrders } from "./services/gateio.api";
+import { createLimitOrder } from "./services/gateio.api";
 import { connectToWebsocket, formatTickerUpdate } from "./services/gateio.ws";
 import { UserOrder } from "./types/order";
-import { SpotTickerStatus, SpotTickerUpdate } from "./types/spot-ticker";
+import { SpotTickerUpdate } from "./types/spot-ticker";
 
 /**
- * Connect to Gate.io websockets and suscribe to pairs that are on the user orders list on Datastax.
- * [Datastax user orders] -- pair --> [Gate.io websockets] -- ticker update -->
+ * Fetch user orders, then connect to the corresponding Gate.io websockets
+ * and suscribe to pairs that are on the user orders list on Datastax.
+ *
+ * Ultimately take the trades when the price is reached for a given pair.
+ *
+ * [Datastax user orders (ORDERS/WATCHER)] --(pair)--> [Gate.io websockets (TICKER)] --(ticker update)--> [Order management (TRADER)]
  * @returns Observable of ticker updates from Gate.io websockets
  */
-async function getTickerUpdates() {
-  const stopTickerUpdates$ = new Subject<boolean>();
+async function getTrader$() {
+  const stopTicker$ = new Subject<boolean>();
 
   // Main stream definition
   const orders$ = interval(2000).pipe(
     // Every 2 seconds
-    switchMap(() => getUserOrders()) // Poll user orders from Datastax
-    // share() // Allow to be used later without retriggering an HTTP connection to Datastax
+    tap(() => console.log("ORDERS")),
+    switchMap(() => getUserOrders()), // Poll user orders from Datastax
+    share() // Allow to be used later without retriggering an HTTP connection to Datastax
   );
-  const orderWatcher$ = orders$.pipe(
-    tap(() => console.log('WATCHER')),
+  // The order watcher is responsible of emitting the new pairs to watch
+  const watcher$ = orders$.pipe(
+    tap(() => console.log("WATCHER")),
     filter((pairs) => !!pairs.length), // The very first value of pair can be empty
     filter((orders) => hasValidOrders(orders)),
     map((orders) => orders.filter(isValidOrder)),
@@ -53,9 +60,10 @@ async function getTickerUpdates() {
     distinctUntilChanged(
       (prev, curr) => JSON.stringify(prev) === JSON.stringify(curr)
     ), // Emit values only when the user orders change
-    tap((pairs) =>
-      console.log("WATCHER found new pairs to watch", pairs)
-    ),
+    tap((pairs) => console.log("WATCHER found new pairs to watch", pairs))
+  );
+  // The ticker is responsible of emitting new quotes for the pairs that are being watched
+  const ticker$ = watcher$.pipe(
     switchMap(
       (pairs) =>
         connectToWebsocket("wss://api.gateio.ws/ws/v4/", "spot.tickers", pairs) // Create a websocket connection to Gate.io and subscribe to the given pair
@@ -63,46 +71,49 @@ async function getTickerUpdates() {
     switchMap(
       (websocket) => fromEvent(websocket, "message") as Observable<MessageEvent>
     ), // Wrap the newly created websocket in an observable
-    map((value) => JSON.parse(value.data.toString()) as SpotTickerUpdate | SpotTickerStatus), // Parse the websocket response
+    map((value) => JSON.parse(value.data.toString()) as SpotTickerUpdate), // Parse the websocket response
     filter((tickerUpdate) => !!tickerUpdate.result.currency_pair),
-    tap((tickerUpdate) => console.log("TICKER", formatTickerUpdate(tickerUpdate))), // Print out the newly received quote
-    takeUntil(stopTickerUpdates$) // Stop emitting values when no user order is available
+    tap((tickerUpdate) =>
+      console.log("TICKER", formatTickerUpdate(tickerUpdate))
+    ), // Print out the newly received quote
+    takeUntil(stopTicker$) // Stop emitting values when no user order is available
   ) as Observable<SpotTickerUpdate>;
 
   // Secondary streams definitions
   orders$
     .pipe(
       filter((orders) => !hasValidOrders(orders)), // When no order is present anymore
-      tap(() => stopTickerUpdates$.next(true)) // Emit a value to disconnect from the ticker updates websockets
+      tap(() => stopTicker$.next(true)) // Emit a value to disconnect from the ticker updates websockets
     )
     .subscribe(); // We subscribe here because we want to this observable to keep on going independently
 
-  stopTickerUpdates$
+  stopTicker$
     .pipe(
       mapTo(false), // Reset the value of the observable to false, so that new websockets connections can happen again when new user orders are present again
-      tap(() => ordersAndTickerUpdates$.subscribe()) // Gate.io websockets will now just wait for new orders to come again
+      tap(() => trader$.subscribe()) // Gate.io websockets will now just wait for new orders to come again
     )
     .subscribe(); // We subscribe here because we want to this observable to keep on going independently
 
-  // Order management
-  const ordersAndTickerUpdates$ = combineLatest([
-    orders$,
-    orderWatcher$,
-  ]).pipe(
-    debounceTime(2000),
+  // The trader is responsible of taking trades when the ticker emits a price lower than the watcher's price
+  const trader$ = combineLatest([orders$, ticker$]).pipe(
+    debounceTime(2000), // Important: avoids duplication of limit orders when many ticker updates occur
     distinctUntilChanged(
       (prev, curr) => JSON.stringify(prev) === JSON.stringify(curr)
-    ), // Avoids duplication of order
-    tap(() => console.log('TRADER')),    
-    filter(([orders]) => hasValidOrders(orders)),
-    tap(([orders, tickerUpdate]) => {
-      console.log(
-        orders.filter(isValidOrder).map(formatOrder),
-        formatTickerUpdate(tickerUpdate)
-      );
-    }),
-    map(([orders, tickerUpdate]) => [orders.filter(isValidOrder), tickerUpdate] as [UserOrder[], SpotTickerUpdate]),
-    tap(([validOrders, tickerUpdate]) => console.log('TRADER', [validOrders.map(formatOrder), formatTickerUpdate(tickerUpdate)])),
+    ), // Avoids duplication of order when the same limit order is emitted
+    tap(() => console.log("TRADER")),
+    map(
+      ([orders, tickerUpdate]) =>
+        [orders.filter(isValidOrder), tickerUpdate] as [
+          UserOrder[],
+          SpotTickerUpdate
+        ]
+    ),
+    tap(([validOrders, tickerUpdate]) =>
+      console.log("TRADER", [
+        validOrders.map(formatOrder),
+        formatTickerUpdate(tickerUpdate),
+      ])
+    ),
     tap(async ([validOrders, tickerUpdate]) => {
       for (const order of validOrders) {
         if (+tickerUpdate.result.last < +order.price) {
@@ -118,10 +129,10 @@ async function getTickerUpdates() {
       }
     })
   );
-  return ordersAndTickerUpdates$;
+  return trader$;
 }
 
 (async () => {
-  const ordersAndWebsockets$ = await getTickerUpdates();
-  ordersAndWebsockets$.subscribe();
+  const trader$ = await getTrader$();
+  trader$.subscribe();
 })();
