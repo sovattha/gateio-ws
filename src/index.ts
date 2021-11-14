@@ -91,7 +91,9 @@ async function getTrader$() {
     tap(([validOrders, tickerUpdate]) =>
       console.log('TRADER valid orders', [validOrders.map(formatOrder), formatTickerUpdate(tickerUpdate)]),
     ),
-    map(([validOrders, tickerUpdate]) => validOrders.filter((order) => +tickerUpdate.result.last < +order.price)),
+    map(([validOrders, tickerUpdate]) =>
+      validOrders.filter((order) => tickerUpdate.result.currency_pair === order.pair && +tickerUpdate.result.last < +order.price),
+    ),
     throttleTime(2000), // Important: avoids duplication of limit orders if too many ticker updates occur
     tap(async (validOrders) => {
       for (const order of validOrders) {
