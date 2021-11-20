@@ -89,7 +89,12 @@ async function getTrader$() {
     distinctUntilChanged((prev, curr) => getPriceTuple(prev) === getPriceTuple(curr)), // Avoids duplication of order when the same limit order is emitted
     map(([orders, tickerUpdate]) => [orders.filter(isValidOrder), tickerUpdate] as [UserOrder[], SpotTickerUpdate]),
     tap(([validOrders, tickerUpdate]) =>
-      console.log('TRADER valid orders', [validOrders.map(formatOrder), formatTickerUpdate(tickerUpdate)]),
+      console.log('TRADER valid orders', [
+        validOrders
+          .sort((o1, o2) => o1.pair.localeCompare(o2.pair) || o1.price - o2.price || o1.side.localeCompare(o2.side)) // Sort by pair, then price, then side
+          .map(formatOrder),
+        formatTickerUpdate(tickerUpdate),
+      ]),
     ),
     map(([validOrders, tickerUpdate]) =>
       validOrders.filter(
