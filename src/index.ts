@@ -63,8 +63,8 @@ async function getTrader$() {
     ),
     switchMap((websocket) => fromEvent(websocket, 'message') as Observable<MessageEvent>), // Wrap the newly created websocket in an observable
     map((value) => JSON.parse(value.data.toString()) as SpotTickerUpdate), // Parse the websocket response
-    filter((tickerUpdate) => !!tickerUpdate.result.currency_pair),
-    distinctUntilChanged((prev, curr) => prev.result.last === curr.result.last),
+    filter((tickerUpdate) => !!tickerUpdate.result?.currency_pair),
+    distinctUntilChanged((prev, curr) => prev.result?.last === curr.result?.last),
     tap((tickerUpdate) => console.log('TICKER', formatTickerUpdate(tickerUpdate))), // Print out the newly received quote
     takeUntil(stopTicker$), // Stop emitting values when no user order is available
   ) as Observable<SpotTickerUpdate>;
