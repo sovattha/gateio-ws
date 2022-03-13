@@ -112,7 +112,8 @@ async function getTrader$() {
     }),
     catchError((error) => {
       console.error(error);
-      return of(undefined);
+      // return of(undefined);
+      process.exit(1);
     }),
   );
   return trader$;
